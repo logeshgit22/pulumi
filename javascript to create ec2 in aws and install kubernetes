@@ -1,0 +1,104 @@
+"use strict";
+const pulumi = require("@pulumi/pulumi");
+const aws = require("@pulumi/aws");
+
+const tls = require("@pulumi/tls")
+
+let size = "t2.micro" ;
+
+const ubuntu =  aws.ec2.getAmi({
+    mostRecent: true,
+    filters: [
+        {
+            name: "name",
+            values: ["ubuntu/images/hvm-ssd/ubuntu-focal-20.04-amd64-server-*"],
+        },
+        {
+            name: "virtualization-type",
+            values: ["hvm"],
+        },
+    ],
+    owners: ["099720109477"],
+});
+
+
+
+const ssh_key = new  tls.PrivateKey("generated",
+    {
+    algorithm :"RSA",
+    rsa_bits : 4096,
+    crkey : "publicKeyOpenssh",
+     });
+
+
+const aws_key = new  aws.ec2.KeyPair("generated",
+    {
+    keyName : "keytt",
+    publicKey : ssh_key.publicKeyOpenssh, 
+   
+
+});
+
+let group = new aws.ec2.SecurityGroup("testk8",{
+ 	ingress: [
+ 		{protocol: "tcp", fromPort: 80, toPort: 80, cidrBlocks: ["0.0.0.0/0"]},
+ 		{protocol: "tcp", fromPort: 6443, toPort: 6443, cidrBlocks: ["0.0.0.0/0"]},
+ 		{protocol: "tcp", fromPort: 2379, toPort: 2380, cidrBlocks: ["0.0.0.0/0"]},
+ 		{protocol: "tcp", fromPort: 10250, toPort: 10250, cidrBlocks: ["0.0.0.0/0"]},
+ 		{protocol: "tcp", fromPort: 10259, toPort: 10259, cidrBlocks: ["0.0.0.0/0"]},
+ 		{protocol: "udp", fromPort: 8472, toPort: 8472, cidrBlocks: ["0.0.0.0/0"]},
+ 		
+ 		{protocol: "udp", fromPort: 11371, toPort: 11371, cidrBlocks: ["0.0.0.0/0"]},
+
+                 {protocol: "tcp", fromPort: 443, toPort: 443, cidrBlocks: ["0.0.0.0/0"]},
+                  {protocol: "tcp", fromPort: 8080, toPort: 8080, cidrBlocks: ["0.0.0.0/0"]},
+                {protocol: "tcp",fromPort:22 , toPort: 22, cidrBlocks:["0.0.0.0/0"]}],
+ egress:[
+        
+            {protocol: "All",
+            fromPort: "",
+            toPort:"",
+            cidrBlocks: ["0.0.0.0/0"]},
+             ],});
+    
+let userData = `#!/bin/bash
+sudo apt-get update
+sudo apt-get -y upgrade
+swapoff -a
+sudo apt-get install -y sshpass   
+sudo apt-get install -y openssh-server
+sudo apt-get update
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+sleep 30s
+sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+sudo apt-get -y update
+sudo apt-cache policy docker-ce
+sudo apt-get install -y docker-ce
+sudo usermod -aG docker $USER
+sudo apt-get install -y apt-transport-https ca-certificates curl
+sudo mkdir /etc/apt/keyrings
+sudo curl https://packages.cloud.google.com/apt/doc/apt-key.gpg --output /etc/apt/keyrings/kubernetes-archive-keyring.gpg
+sudo echo "deb [signed-by=/etc/apt/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list
+sudo apt-get update
+sudo apt-get install -y kubelet kubeadm kubectl
+sudo apt-mark hold kubelet kubeadm kubectl
+systemctl daemon-reload
+systemctl restart kubelet
+sudo apt-get update` ;
+
+
+ 		
+let server = new aws.ec2.Instance("test-k8install",{
+	instanceType: size,
+	 ami: ubuntu.then(ubuntu => ubuntu.id),
+        vpcSecurityGroupIds: [ group.id ],
+        keyName:aws_key.keyName,
+	userData: userData ,
+});
+
+	
+
+	
+exports.publicIp = server.publicIP;
+exports.publiHostName = server.publicDns;
+exports.privateKeyPem = ssh_key.privateKeyPem;
