@@ -1,0 +1,117 @@
+"use strict";
+const pulumi = require("@pulumi/pulumi");
+const aws = require("@pulumi/aws");
+
+const tls = require("@pulumi/tls");
+
+let size = "t2.micro" ;
+
+const ubuntu =  aws.ec2.getAmi({
+    mostRecent: true,
+    filters: [
+        {
+            name: "name",
+            values: ["ubuntu/images/hvm-ssd/ubuntu-focal-20.04-amd64-server-*"],
+        },
+        {
+            name: "virtualization-type",
+            values: ["hvm"],
+        },
+    ],
+    owners: ["099720109477"],
+});
+
+
+
+const ssh_key = new  tls.PrivateKey("generated",
+    {
+    algorithm :"RSA",
+    rsa_bits : 4096,
+    crkey : "publicKeyOpenssh",
+     });
+
+
+const aws_key = new  aws.ec2.KeyPair("generated",
+    {
+    keyName : "key",
+    publicKey : ssh_key.publicKeyOpenssh, 
+   
+
+});
+
+let group = new aws.ec2.SecurityGroup('webapp',{
+ 	ingress: [ {protocol: "All",
+            fromPort: "",
+            toPort:"",
+            cidrBlocks: ["0.0.0.0/0"]}
+ 		],
+ egress:[
+        
+            {protocol: "All",
+            fromPort: "",
+            toPort:"",
+            cidrBlocks: ["0.0.0.0/0"]},
+             ],});
+    
+let userData =`#!/bin/bash
+sudo su
+mkdir hello
+cd /home/ubuntu ; git clone <linK>
+cd /home/ubuntu ; git clone <link>
+cd /home/ubuntu ; git clone <link>
+sudo apt-get update
+sudo tee -a  ~/.bashrc
+sudo curl -fsSL https://packages.redis.io/gpg | sudo gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg
+sudo apt install -y lsb-release
+sudo curl -fsSL https://packages.redis.io/gpg | sudo gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg
+sudo echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/redis.list
+sudo apt-get update
+sudo apt-get install -y redis
+sudo systemctl enable redis-server
+sudo systemctl start redis-server
+sudo service mongod stop
+sudo apt-get purge mongodb-org*
+sudo rm -r /var/log/mongodb /var/lib/mongodb
+wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | sudo apt-key add -
+sudo apt-get install gnupg
+wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | sudo apt-key add -
+sudo echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/6.0 multiverse" |sudo tee -a /etc/apt/sources.list.d/mongodb-org-6.0.list
+sudo apt-get update
+sudo apt-get install -y mongodb-org
+sudo systemctl enable mongod
+sudo systemctl start mongod
+sudo apt-get install curl gnupg apt-transport-https -y
+sudo curl -1sLf "https://keys.openpgp.org/vks/v1/by-fingerprint/0A9AF2115F4687BD29803A206B73A36E6026DFCA" | sudo gpg --dearmor | sudo tee /usr/share/keyrings/com.rabbitmq.team.gpg > /dev/null
+sudo curl -1sLf "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xf77f1eda57ebb1cc" | sudo gpg --dearmor | sudo tee /usr/share/keyrings/net.launchpad.ppa.rabbitmq.erlang.gpg > /dev/null
+sudo curl -1sLf "https://packagecloud.io/rabbitmq/rabbitmq-server/gpgkey" | sudo gpg --dearmor | sudo tee /usr/share/keyrings/io.packagecloud.rabbitmq.gpg > /dev/null
+sudo echo "deb [signed-by=/usr/share/keyrings/net.launchpad.ppa.rabbitmq.erlang.gpg] http://ppa.launchpad.net/rabbitmq/rabbitmq-erlang/ubuntu bionic main \n deb-src [signed-by=/usr/share/keyrings/net.launchpad.ppa.rabbitmq.erlang.gpg] http://ppa.launchpad.net/rabbitmq/rabbitmq-erlang/ubuntu bionic main \n deb [signed-by=/usr/share/keyrings/io.packagecloud.rabbitmq.gpg] https://packagecloud.io/rabbitmq/rabbitmq-server/ubuntu/ bionic main \n deb-src [signed-by=/usr/share/keyrings/io.packagecloud.rabbitmq.gpg] https://packagecloud.io/rabbitmq/rabbitmq-server/ubuntu/ bionic main "|sudo tee /etc/apt/sources.list.d/rabbitmq.list 
+sudo apt-get update -y
+sudo apt-get install -y erlang-base \erlang-asn1 erlang-crypto erlang-eldap erlang-ftp erlang-inets \erlang-mnesia erlang-os-mon erlang-parsetools erlang-public-key \erlang-runtime-tools erlang-snmp erlang-ssl \erlang-syntax-tools erlang-tftp erlang-tools erlang-xmerl
+sudo apt-get install rabbitmq-server -y --fix-missing
+sudo systemctl start rabbitmq-server
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.3/install.sh | bash
+wget -qO- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.3/install.sh | bash
+sudo source ~/.bashrc
+nvm install 12.0.0
+nvm use 12.0.0
+sudo npm install dotenv
+cd /home/ubuntu/folder 1 ; npm i ; node server.js
+cd /home/ubuntu/folder2 ; npm i ; npm run build ; cd /dist/ ; node server.js
+cd /home/ubuntu/folder 3; npm i ; CLIENT_PROXY=http://localhost:8080 PORT=3000 FOLDER2=http://localhost:9090 FOLDER3=http://localhost:9090 npm run start`;
+
+
+ 		
+let server = new aws.ec2.Instance("webapp",{
+	instanceType: size,
+	 ami: ubuntu.then(ubuntu => ubuntu.id),
+        vpcSecurityGroupIds: [ group.id ],
+        keyName:aws_key.keyName,
+	userData: userData ,
+});
+
+	
+
+	
+exports.publicIp = server.publicIP;
+exports.publiHostName = server.publicDns;
+exports.privateKeyPem = ssh_key.privateKeyPem;
