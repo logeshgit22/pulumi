@@ -54,8 +54,8 @@ let group = new aws.ec2.SecurityGroup("testk8",{
 let userData = `#!/bin/bash
 sudo apt-get update
 sudo apt install -y zip
-cd /home/ubuntu ; sudo unzip kl.zip
-cd /home/ubuntu ; sudo rm -rf kl.zip`;
+cd /home/ubuntu ; sudo unzip filename.zip
+cd /home/ubuntu ; sudo rm -rf filename.zip`;
 
 
 
@@ -78,8 +78,8 @@ var connect = {
 
 const sizeFile = new command1.remote.CopyFile("find", {
     connection: connect,
-    localPath: "/home/logeshwaran/kl.zip",
-    remotePath: "/home/ubuntu/kl.zip"});
+    localPath: "/home/logeshwaran/filename.zip",
+    remotePath: "/home/ubuntu/filename.zip"});
 
 
 
